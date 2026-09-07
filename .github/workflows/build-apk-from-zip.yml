@@ -1,0 +1,52 @@
+name: Build BIDE OPD APK from ZIP
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Unpack Android project
+        run: |
+          test -f BIDE_OPD_Registry_Source_with_CI.zip
+          rm -rf buildsrc
+          mkdir -p buildsrc
+          unzip -q BIDE_OPD_Registry_Source_with_CI.zip -d buildsrc
+          test -f buildsrc/BIDE_OPD_Registry/app/build.gradle
+          test -f buildsrc/BIDE_OPD_Registry/settings.gradle
+
+      - name: Build debug APK
+        working-directory: buildsrc/BIDE_OPD_Registry
+        run: gradle :app:assembleDebug --stacktrace
+
+      - name: Prepare named APK
+        run: |
+          cp buildsrc/BIDE_OPD_Registry/app/build/outputs/apk/debug/app-debug.apk BIDE_OPD_Registry_v1.0-debug.apk
+          ls -lh BIDE_OPD_Registry_v1.0-debug.apk
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BIDE-OPD-Registry-APK
+          path: BIDE_OPD_Registry_v1.0-debug.apk
+          if-no-files-found: error
