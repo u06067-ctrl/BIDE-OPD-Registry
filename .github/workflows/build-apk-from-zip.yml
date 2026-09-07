@@ -28,10 +28,10 @@ jobs:
 
       - name: Unpack Android project
         run: |
-          test -f BIDE_OPD_Registry_Source_with_CI.zip
+          test -f BIDE_OPD_Registry_Source_with_CI (1).zip
           rm -rf buildsrc
           mkdir -p buildsrc
-          unzip -q BIDE_OPD_Registry_Source_with_CI.zip -d buildsrc
+          unzip -q BIDE_OPD_Registry_Source_with_CI (1).zip -d buildsrc
           test -f buildsrc/BIDE_OPD_Registry/app/build.gradle
           test -f buildsrc/BIDE_OPD_Registry/settings.gradle
 
