@@ -1,0 +1,227 @@
+# Build and production-sign the BIDE OPD Registry
+
+## 1. Create a BIDE-owned signing key (one time only)
+
+Run this on a trusted BIDE-controlled computer and keep both the keystore and passwords securely backed up:
+
+```bash
+keytool -genkeypair -v \
+  -keystore bide-opd-release.jks \
+  -alias bide-opd \
+  -keyalg RSA -keysize 4096 \
+  -validity 10000
+```
+
+Do not place the production keystore or passwords in source control, chat, email, or a public shared folder.
+
+## 2. Configure environment variables
+
+Linux/macOS example:
+
+```bash
+export BIDE_KEYSTORE=/secure/path/bide-opd-release.jks
+export BIDE_STORE_PASSWORD='your-store-password'
+export BIDE_KEY_ALIAS='bide-opd'
+export BIDE_KEY_PASSWORD='your-key-password'
+```
+
+Windows PowerShell example:
+
+```powershell
+$env:BIDE_KEYSTORE='C:\secure\bide-opd-release.jks'
+$env:BIDE_STORE_PASSWORD='your-store-password'
+$env:BIDE_KEY_ALIAS='bide-opd'
+$env:BIDE_KEY_PASSWORD='your-key-password'
+```
+
+## 3. Build the signed release APK
+
+From Android Studio use **Build > Generate Signed Bundle / APK**, or from a terminal with a Gradle wrapper installed:
+
+```bash
+./gradlew clean assembleRelease
+```
+
+Output is normally under:
+
+`app/build/outputs/apk/release/`
+
+## 4. Verify the signature
+
+Using Android Build Tools:
+
+```bash
+apksigner verify --verbose --print-certs app-release.apk
+```
+
+Record the SHA-256 certificate digest and keep it in BIDE's deployment documentation.
+
+## 5. Recommended staff distribution
+
+For the best Play Protect reputation and update path, publish through a BIDE-controlled Google Play Console account and use Google Play App Signing, preferably Internal or Closed testing if the application is staff-only.
+
+Sideloaded APKs may still generate device-specific warnings even when correctly signed. Do not attempt to bypass or disable Play Protect.
+
+## 6. 2026 Android developer verification
+
+The application package name is `pk.org.bide.opdregistry`. If BIDE distributes the app through Google Play, register/verify this package under the BIDE-controlled developer identity and keep the production signing identity consistent. Google has announced Android developer-verification requirements rolling out in 2026; package registration and verified developer ownership are separate from merely signing an APK.
+
+## GitHub Actions APK build
+A workflow is included at `.github/workflows/build-apk.yml`. After pushing the project to a GitHub repository, run **Actions > Build Android APK > Run workflow**. The workflow builds an installable debug-signed APK and uploads it as the `BIDE-OPD-Registry-APK` artifact.
+
+For production deployment, replace debug signing with a BIDE-controlled release keystore and keep the keystore/private passwords in GitHub Secrets. Do not publish the private signing key in the repository.
+
+# Data dictionary
+
+| Field | Type | Required | Notes |
+|---|---|---:|---|
+| MR Number | Text | Yes | Patient identifier; unique at patient level |
+| Contact Number | Text | Yes | 7–15 digits after formatting characters are removed |
+| Visit Date | ISO date | Yes | `YYYY-MM-DD` |
+| Visit Type | Dropdown | Yes | Configurable in Settings |
+| Next Appointment | ISO date | No | Cannot be earlier than Visit Date |
+| Status | Dropdown | Yes | Configurable in Settings |
+| Remarks | Text | No | Administrative free text |
+| Created At | Timestamp | System | Exported automatically |
+| Updated At | Timestamp | System | Exported automatically |
+
+Default visit types: New Patient, Follow-up, Walk-in, Diabetes Clinic, Endocrine Clinic, Teleconsultation, Other.
+
+Default statuses: Scheduled, Checked In, Completed, Cancelled, Missed, Rescheduled.
+
+# BIDE Karachi OPD Registry — Android
+
+Version 1.0.0
+
+An offline-first Android application for BIDE Karachi OPD administrative staff to register and manage patient visits and appointments by MR number.
+
+## Core fields
+
+- MR number
+- Contact number
+- Visit date
+- Visit type (configurable dropdown)
+- Next appointment date
+- Status (configurable dropdown)
+- Remarks
+
+## Main capabilities
+
+- MR-based patient database with multiple visit/appointment records per patient
+- Automatic contact lookup when a known MR number is entered
+- Dashboard: unique patients, total visits, today's visits, appointments due in 7 days, scheduled/completed/missed counts
+- Search by MR number, contact number, or remarks
+- Filters by visit type, status, date range, and upcoming appointments
+- Sort by newest/oldest visit, next appointment, or MR number
+- Edit and delete visits
+- Quick “Add follow-up” from an existing visit
+- Configurable Visit Type and Status dropdown values
+- True Excel `.xlsx` export with **OPD Records** and **Summary** worksheets
+- Export scopes: all records, current filter, custom date/status/type, next 30 days, or today's visits
+- CSV export
+- Full JSON backup/restore
+- Local 4–8 digit staff PIN
+- No INTERNET permission; Android cloud backup disabled
+
+## Workflow inspiration
+
+The workflow follows established EMR/HMIS ideas used by OpenMRS and Bahmni: patient registration/search, appointment status management, visit types, and offline-friendly point-of-care/registration workflows. This project is intentionally much smaller and focuses only on OPD administrative registration and appointments.
+
+## Data model
+
+The app uses two local SQLite tables:
+
+1. `patients`: one row per MR number and current contact number
+2. `visits`: multiple dated visit/appointment records linked to the patient
+
+Excel export flattens this into the requested columns for reporting.
+
+## Build
+
+Requirements:
+
+- Android Studio (current stable recommended)
+- Android SDK Platform 35
+- JDK 17 or newer supported by the selected Android Gradle Plugin
+
+Open this folder as an Android Studio project and allow Gradle to sync. Build > Build APK(s) creates a debug APK.
+
+## Release signing
+
+Do **not** publish a hospital app using a shared example/private key from a third party. BIDE should own the production signing key.
+
+The project already reads release signing credentials from environment variables:
+
+- `BIDE_KEYSTORE`
+- `BIDE_STORE_PASSWORD`
+- `BIDE_KEY_ALIAS`
+- `BIDE_KEY_PASSWORD`
+
+See `BUILD_AND_SIGN.md` for exact commands.
+
+## Play Protect / Play distribution
+
+A cryptographic APK signature is required, but it does not by itself guarantee that Google Play Protect will never show a warning. For the strongest distribution trust, use BIDE's own developer account and Google Play App Signing (for example, Internal/Closed testing for a staff-only app), keep the target SDK current, request only necessary permissions, and preserve the same signing identity for updates.
+
+This application intentionally requests **zero runtime permissions** and does not request Internet access.
+
+## Important deployment note
+
+Version 1.0.0 is a **single-device local registry**. If several reception desks need to enter records at the same time, deploy a central authenticated backend and staff-specific accounts/audit logs rather than using independent copies of the local database.
+
+# Security and privacy notes
+
+The app stores MR numbers and contact details, which are identifiable patient information.
+
+Current protections in v1.0.0:
+
+- Local app-private SQLite storage
+- No INTERNET permission
+- `android:allowBackup="false"`
+- Cleartext network traffic disabled
+- Staff PIN gate with salted SHA-256 verifier
+- No analytics, advertisements, cloud SDKs, or third-party libraries
+- Export only through Android's user-selected document location
+
+Operational recommendations before real patient use:
+
+- Use BIDE-owned managed Android devices with screen lock and device encryption enabled.
+- Restrict who knows the app PIN; change it after staff turnover.
+- Store exported Excel/CSV/JSON files only in approved encrypted locations.
+- Establish retention, backup, access, and deletion rules approved by BIDE administration/IT.
+- For multiple staff or devices, move to authenticated individual accounts and a central database with an audit trail.
+- Consider database-at-rest encryption in a future centrally managed release if institutional policy requires it.
+
+.gradle/
+.idea/
+local.properties
+build/
+app/build/
+*.iml
+*.jks
+*.keystore
+
+plugins {
+    id 'com.android.application' version '8.7.3' apply false
+}
+
+org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+android.useAndroidX=false
+android.nonTransitiveRClass=true
+
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+rootProject.name = 'BIDEOPDRegistry'
+include ':app'
